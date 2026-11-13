@@ -1,0 +1,17 @@
+# Environment for console_keys.py, the Windows console input check of issue #242.
+# It imports vibepod from ../../src, so only the packages that import pulls in
+# are listed here; no install of vibepod itself is needed.
+[workspace]
+name = "vibepod-windows-console"
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "linux-aarch64", "osx-arm64"]
+
+[dependencies]
+python = "3.12.*"
+docker-py = ">=7.0.0"
+platformdirs = ">=4.0.0"
+pyyaml = ">=6.0.0"
+
+[tasks]
+keys = "python console_keys.py keys"
+attach = "python console_keys.py attach"
