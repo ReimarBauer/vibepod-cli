@@ -46,18 +46,19 @@ _STATE_NAMES = [
 
 _QUIT = 0x04  # Ctrl+D
 
-#: The container side: print the hex of every byte the TTY receives, one key
-#: burst per spawned dd/od pair, a line break after Enter; Ctrl+D ends it.
+#: The container side: print the hex of every byte the TTY receives, a line
+#: break after Enter; Ctrl+D (shown as ``04``) ends it with "container exits".
 _HEX_ECHO = r"""
 stty raw -echo
 printf 'Connected. Every byte the container receives is shown in hex. Ctrl+D quits.\r\n'
 while :; do
   b=$(dd bs=1 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n')
-  [ -z "$b" ] || [ "$b" = 04 ] && break
+  [ -z "$b" ] && break
   printf '%s ' "$b"
+  [ "$b" = 04 ] && break
   [ "$b" = 0d ] && printf '\r\n'
 done
-printf '\r\nbye\r\n'
+printf '\r\ncontainer exits\r\n'
 """
 
 
@@ -136,8 +137,17 @@ def attach() -> int:
         detach=True,
         labels={"vibepod.diagnostic": "windows-console-keys"},
     )
+    started = time.monotonic()
     try:
         manager.attach_interactive(container)
+        # Seeing "container exits" but not this line means the session did not
+        # end when the container did; "04" missing means Ctrl+D never arrived.
+        print(f"\nattach returned after {time.monotonic() - started:.1f} s")
+        try:
+            container.reload()
+            print(f"container status: {container.status}")
+        except Exception as exc:
+            print(f"container status unknown: {exc}")
     finally:
         try:
             container.remove(force=True)
