@@ -121,6 +121,19 @@ def keys() -> int:
         docker_mod._leave_console_raw_input(old_mode)
 
 
+_TAIL = 200
+
+
+class _SentBytes:
+    """Session logger stand-in: collects every byte vp forwards to the container."""
+
+    def __init__(self) -> None:
+        self.data = bytearray()
+
+    def log_input(self, data: bytes) -> None:
+        self.data.extend(data)
+
+
 def attach() -> int:
     manager = docker_mod.DockerManager()
     image = "alpine:3.20"
@@ -137,21 +150,32 @@ def attach() -> int:
         detach=True,
         labels={"vibepod.diagnostic": "windows-console-keys"},
     )
+    sent = _SentBytes()
     started = time.monotonic()
     try:
-        manager.attach_interactive(container)
+        received = manager.attach_interactive(container, logger=sent)
         # Seeing "container exits" but not this line means the session did not
         # end when the container did; "04" missing means Ctrl+D never arrived.
         print(f"\nattach returned after {time.monotonic() - started:.1f} s")
         # The first request after an attach can hit the pooled connection the
         # daemon has dropped meanwhile; one retry gets a fresh one.
+        logs = b""
         for attempt in (1, 2):
             try:
                 container.reload()
                 print(f"container status: {container.status}")
+                logs = container.logs()
                 break
             except Exception as exc:
                 print(f"container status unknown (attempt {attempt}): {exc}")
+        # Three views of the session end, to tell lost input from lost output:
+        # what vp sent, what the container printed (its log) and what vp got.
+        print(f"\nsent by vp ({len(sent.data)} bytes): {sent.data.hex(' ')}")
+        print(f"container log, last {_TAIL} bytes: {logs[-_TAIL:]!r}")
+        print(f"received by vp, last {_TAIL} bytes: {received[-_TAIL:]!r}")
+        if logs:
+            same = logs.endswith(received[-_TAIL:]) or received.endswith(logs[-_TAIL:])
+            print("output tail complete" if same else "OUTPUT TAIL DIFFERS from the log")
     finally:
         try:
             container.remove(force=True)
