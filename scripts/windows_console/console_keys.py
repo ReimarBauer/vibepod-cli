@@ -143,11 +143,15 @@ def attach() -> int:
         # Seeing "container exits" but not this line means the session did not
         # end when the container did; "04" missing means Ctrl+D never arrived.
         print(f"\nattach returned after {time.monotonic() - started:.1f} s")
-        try:
-            container.reload()
-            print(f"container status: {container.status}")
-        except Exception as exc:
-            print(f"container status unknown: {exc}")
+        # The first request after an attach can hit the pooled connection the
+        # daemon has dropped meanwhile; one retry gets a fresh one.
+        for attempt in (1, 2):
+            try:
+                container.reload()
+                print(f"container status: {container.status}")
+                break
+            except Exception as exc:
+                print(f"container status unknown (attempt {attempt}): {exc}")
     finally:
         try:
             container.remove(force=True)
