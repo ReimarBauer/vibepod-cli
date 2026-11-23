@@ -167,6 +167,12 @@ def test_special_text_keys() -> None:
     assert decode(key("\r", vk=0x0D)) == b"\r"
 
 
+def test_shift_enter_is_a_plain_enter_like_on_a_linux_terminal() -> None:
+    # GNOME Terminal, Konsole and xterm send CR for Shift+Enter too; only
+    # Alt+Enter (ESC CR) is a distinct key.
+    assert decode(key("\r", vk=0x0D, state=_D._SHIFT_PRESSED)) == b"\r"
+
+
 def test_key_releases_and_keys_without_text_send_nothing() -> None:
     assert decode(key("a", vk=0x41, down=False)) == b""
     assert decode(key(vk=0x10, state=_D._SHIFT_PRESSED)) == b""  # Shift alone
